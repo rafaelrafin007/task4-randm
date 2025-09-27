@@ -1,4 +1,4 @@
-// index.js - CLI entry and main game loop
+// index.js - CLI entry and main game loop (updated: hide NOT revealed early; reveal at end)
 const ArgParser = require('./src/ArgParser');
 const MortyLoader = require('./src/MortyLoader');
 const FairRandomProtocol = require('./src/FairRandomProtocol');
@@ -15,6 +15,17 @@ function promptInt(msg, min, max){
     if(Number.isInteger(n) && n>=min && n<=max) return n;
     console.log(`Please enter integer in [${min},${max}].`);
   }
+}
+
+// simple ordinal helper: 1 -> 1st, 2 -> 2nd, 3 -> 3rd, else "Nth"
+function ordinal(n){
+  const v = Math.abs(n) % 100;
+  const v1 = v % 10;
+  if (v > 10 && v < 14) return n + 'th';
+  if (v1 === 1) return n + 'st';
+  if (v1 === 2) return n + 'nd';
+  if (v1 === 3) return n + 'rd';
+  return n + 'th';
 }
 
 // parse args
@@ -47,7 +58,7 @@ const stats = new StatsCollector();
 (async function main(){
   while(true){
     uiLog('\n--- New round ---');
-    // Morty hides
+    // Morty hides (but should NOT announce the hidden box here)
     if(typeof morty.hide === 'function'){
       await morty.hide(N);
     } else {
@@ -87,17 +98,25 @@ const stats = new StatsCollector();
     const switched = (choice !== -1 && choice !== guess);
     if(choice !== -1) finalChoice = choice;
 
-    // reveal protocol reveals (if any)
-    const reveals = protocol.getReveals();
-    reveals.forEach((r,idx)=>{
-      uiLog(`Morty: Aww man, my ${idx+1}th random value is ${r.mortyValue}.`);
+        // reveal protocol reveals (only the latest round)
+    const allReveals = protocol.getReveals();
+    if(allReveals.length){
+      const idx = allReveals.length - 1;
+      const r = allReveals[idx];
+      const ord = ordinal(idx+1);
+      uiLog(`Morty: Aww man, my ${ord} random value is ${r.mortyValue}.`);
       uiLog(`Morty: KEY${idx+1}=${r.keyHex}`);
-      uiLog(`Morty: So the ${idx+1}th fair number is (morty + rick) % N = ${r.final}`);
-    });
+      uiLog(`Morty: So the ${ord} fair number is (${r.mortyValue} + rick) % ${N} = ${r.final}`);
+    }
+
+
+    // Now reveal where Morty actually hid the gun (only now)
+    if(typeof morty.hidden !== 'undefined'){
+      uiLog(`Morty: Your portal gun is in box ${morty.hidden}.`);
+    }
 
     // Determine win
-    const hiddenIndex = morty.hidden;
-    const won = (finalChoice === hiddenIndex);
+    const won = (finalChoice === morty.hidden);
     if(won) uiLog('Morty: Aww man, you won, Rick!');
     else uiLog('Morty: Aww man, you lost, Rick.');
 
